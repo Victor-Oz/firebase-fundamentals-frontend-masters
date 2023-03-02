@@ -1,19 +1,34 @@
 <script setup>
 import { onMounted, reactive } from 'vue';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { useRoute } from 'vue-router'
-import { snarkdownEnhanced as snarkdown } from '../util';
+import { config } from '../config';
 
+import { debounce, snarkdownEnhanced as snarkdown } from '../util';
+
+const app = initializeApp(config.firebase);
 const route = useRoute();
+const db = getFirestore(app);
+const markdownCol = collection(db, 'markdowns');
 const state = reactive({ });
-onMounted(() => {
+const singleDoc = doc(markdownCol, route.params.id);
 
+onMounted(() => {
+  onSnapshot(singleDoc, snapshot => {
+    const data = snapshot.data() || {};
+    state.converted = data.converted;
+    state.markdown = data.markdown;
+  });
 })
 
 function convert(event) {
   const markdown = event.target.value;
   const converted = snarkdown(markdown);
-  state.converted = converted;
+  setDoc(singleDoc, { converted, markdown }, { merge: true });
 }
+
+const waitConvert = debounce(convert, 150)
 
 </script>
 
@@ -21,7 +36,7 @@ function convert(event) {
   <h3>Editor</h3>
   <router-link to="/dashboard">&lt; Dashboard</router-link>
   <div id="editor">
-    <textarea @keyup="convert" v-model="state.markdown"></textarea>
+    <textarea @keyup="waitConvert" v-model="state.markdown"></textarea>
     <div class="output" v-html="state.converted"></div>
   </div>
 </template>
